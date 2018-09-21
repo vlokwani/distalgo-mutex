@@ -1,18 +1,19 @@
 import sys
 import random as rand
 import argparse
+import controller
 
-config(channel is fifo, clock is lamport)
-
-class P(process):
-    def setup(s:set, nrequests:int):  # s is set of all other processes
+class P(process, controller.Controllee):
+    def setup(ctl, s:set, nrequests:int):  # s is set of all other processes
+        super().setup(ctl)
         self.q = set()
+        self.cs = False
 
     def requestResource():
         -- request
         # output("Entering Request resource for process:", self)
         if nrequests > 0:
-            # output("Requesting resource for process:", self)
+            output("Requesting resource for process:", self)
             nrequests -= 1
             c = logical_clock()
             send(('request', c, self), to= s)
@@ -25,18 +26,22 @@ class P(process):
         -- critical_section
         cond = some(('request', c, self) in q, has=each(('request', c2, p) in q, has= (c, self) == (c2, p) or (c, self) < (c2, p))) and each(p in s, has=some(received(('ack', c3, _p)), has= c3 > c))
         # output(cond, self)
-        if cond:
-            # output("Entering critical section for process: ", self)
+        if cond and not cs:
+            output("Entering critical section for process: ", self)
+            cs = True
             task()
-            releaseResource()
+            
 
     def releaseResource():
-        # output("Release resource for process", self)
         -- release
-        for r in setof(('request', c, self), ('request', c, self) in q):
-            q.remove(r)
-            break
-        send(('release', logical_clock(), self), to= s)
+        if cs:
+            output("Release resource for process", self)
+            cs = False
+            for r in setof(('request', c, self), ('request', c, self) in q):
+                q.remove(r)
+                break
+            send(('release', logical_clock(), self), to= s)
+
 
     def receive(msg= ('request', c2, p)):
         q.add(('request', c2, p))
@@ -53,31 +58,40 @@ class P(process):
 #            if tag == 'request' and p2 == p:
 #                q.remove((tag, c, p2)); break
 
+    @controller.run
     def run():
         def task():
             output('in cs')
         asyncFunctions = [
                 (requestResource, []), 
-                (criticalSection, [task])
+                (criticalSection, [task]),
+                (releaseResource, [])
             ]
         while nrequests > 0 or setof(('request', c, self), ('request', c, self) in q):
-            func = asyncFunctions[rand.randint(0,1)]
+            func = asyncFunctions[rand.randint(0,2)]
             # output(nreq   uests, setof(('request', c, self), ('request', c, self) in q))
             func[0](*func[1])
 
-        send(('done', self), to= parent())
-        await(received(('done',), from_=parent()))
-        output('terminating')
+        # send(('done', self), to= parent())
+        # await(received(('done',), from_=parent()))
+        # output('terminating')
 
 def main():
     nprocs = int(sys.argv[1]) if len(sys.argv) > 1 else 10
     nrequests = int(sys.argv[2]) if len(sys.argv) > 2 else 1
 
+    config(channel is fifo, clock is lamport)
+
+    ctl = new(controller.Controller, num= 1)
+    setup(ctl, (nprocs,))
+    start(ctl)
+
     ps = new(P, num=nprocs)
-    for p in ps: setup(p, (ps-{p}, nrequests))
+    for p in ps: setup(p, (ctl, ps-{p}, nrequests))
     start(ps)
-    await(each(p in ps, has=received(('done', p))))
-    send(('done',), to=ps)
+
+    # await(each(p in ps, has=received(('done', p))))
+    # send(('done',), to=ps)
 
 # This is an executable specification of the algorithm described in
 # Lamport, L. (1978). "Time, clocks, and the ordering of events in a
