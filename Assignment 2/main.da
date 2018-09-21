@@ -1,0 +1,76 @@
+import argparse
+import controller
+import subprocess
+import re
+import json
+#import orig
+#import spec
+
+
+def parse_output(s):
+    """Parse a string of standard output text for the "OUTPUT: <JSON>"
+    line and return the parsed JSON object.
+    """
+    m = re.search(r'^###OUTPUT: (.*)', s, re.MULTILINE)
+    if m is None:
+        return None
+    return json.loads(m.group(1))
+
+def launch(run_args, timeout=60):
+    """Launch the specified run profile in a subprocess that
+    captures/parses standard output and error. Return a JSON object
+    obtained by parsing stdout for a line "OUTPUT: <JSON>", where
+    <JSON> is JSON-encoded data.
+    """
+    child = subprocess.Popen(
+        run_args, bufsize=-1,
+        # To debug, comment out this line to make stdout/stderr
+        # the same standard out and error streams as the parent.
+        # Alternatively (if the process terminates), uncomment
+        # the print statements below.
+        # In the future, maybe use something like
+        #   http://stackoverflow.com/questions/375427/non-blocking-read-on-a-subprocess-pipe-in-python
+        stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+        #cwd=dirname,
+        #env=env,
+        universal_newlines=True)
+    
+    try:
+        stdout, stderr = child.communicate(timeout=timeout)
+    except TimeoutError:
+        child.kill() # because of disobedience :@
+        stdout, stderr = child.communicate()
+#   print(stdout)
+    # if child.returncode != 0:
+        # raise subprocess.CalledProcessError(child.returncode, run_args, stderr)
+
+    results = parse_output(stdout)
+    return results
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('nprocs', nargs='?', default=10, type=int)
+    parser.add_argument('nrequests', nargs='?', default=1, type=int)
+    parser.add_argument('nruns', nargs='?', default=1, type=int)
+    parser.add_argument('nparams', nargs='?', default=1, type=int)
+    parser.add_argument('nreps', nargs='?', default=1, type=int)
+    args = parser.parse_args()
+
+    nprocs, nrequests, nruns, nparams, nreps = args.nprocs, args.nrequests, args.nruns, args.nparams, args.nreps
+
+    # ctl = new(controller.Controller, num= 1)
+    # setup(ctl, (nprocs,))
+    # start(ctl)
+
+    mutex_implementations = ['my_impl.da', 'orig.da', 'spec.da']
+
+    for mutex_impl in mutex_implementations:
+        print("running performance testing for mutex implementation: {}".format(mutex_impl))
+        for rep in range(nreps): 
+            for requests in range(nrequests//nparams, nrequests+1, nrequests//nparams):
+                results = launch(['python3', '-m', 'da', mutex_impl, str(nprocs), str(requests)])
+                print(results)
+                
+            for procs in range(nprocs//nparams, nprocs+1, nprocs//nparams):
+                results = launch(['python3', '-m', 'da', mutex_impl, str(procs), str(nrequests)])
+                print(results)
