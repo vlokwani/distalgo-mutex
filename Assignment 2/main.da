@@ -1,5 +1,6 @@
 import sys
 import random as rand
+import argparse
 
 config(channel is fifo, clock is lamport)
 
@@ -11,7 +12,7 @@ class P(process):
         -- request
         # output("Entering Request resource for process:", self)
         if nrequests > 0:
-            output("Requesting resource for process:", self)
+            # output("Requesting resource for process:", self)
             nrequests -= 1
             c = logical_clock()
             send(('request', c, self), to= s)
@@ -25,12 +26,12 @@ class P(process):
         cond = some(('request', c, self) in q, has=each(('request', c2, p) in q, has= (c, self) == (c2, p) or (c, self) < (c2, p))) and each(p in s, has=some(received(('ack', c3, _p)), has= c3 > c))
         # output(cond, self)
         if cond:
-            output("Entering critical section for process: ", self)
+            # output("Entering critical section for process: ", self)
             task()
             releaseResource()
 
     def releaseResource():
-        output("Release resource for process", self)
+        # output("Release resource for process", self)
         -- release
         for r in setof(('request', c, self), ('request', c, self) in q):
             q.remove(r)
@@ -69,8 +70,15 @@ class P(process):
         output('terminating')
 
 def main():
-    nprocs = int(sys.argv[1]) if len(sys.argv) > 1 else 10
-    nrequests = int(sys.argv[2]) if len(sys.argv) > 2 else 1
+    parser = argparse.ArgumentParser()
+    parser.add_argument('nprocs', nargs='?', default=10, type=int)
+    parser.add_argument('nrequests', nargs='?', default=1, type=int)
+    parser.add_argument('nruns', nargs='?', default=1, type=int)
+    parser.add_argument('nparams', nargs='?', default=1, type=int)
+    parser.add_argument('nreps', nargs='?', default=1, type=int)
+    args = parser.parse_args()
+
+    nprocs, nrequests, nruns, nparams, nreps = args.nprocs, args.nrequests, args.nruns, args.nparams, args.nreps
 
     ps = new(P, num=nprocs)
     for p in ps: setup(p, (ps-{p}, nrequests))
