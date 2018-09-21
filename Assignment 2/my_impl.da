@@ -1,11 +1,13 @@
 import sys
 import random as rand
 import argparse
+import controller
 
 config(channel is fifo, clock is lamport)
 
 class P(process):
-    def setup(s:set, nrequests:int):  # s is set of all other processes
+    def setup(ctl, s:set, nrequests:int):  # s is set of all other processes
+        super().setup(ctl)
         self.q = set()
 
     def requestResource():
@@ -80,11 +82,26 @@ def main():
 
     nprocs, nrequests, nruns, nparams, nreps = args.nprocs, args.nrequests, args.nruns, args.nparams, args.nreps
 
-    ps = new(P, num=nprocs)
-    for p in ps: setup(p, (ps-{p}, nrequests))
-    start(ps)
-    await(each(p in ps, has=received(('done', p))))
-    send(('done',), to=ps)
+    ctl = new(controller.Controller, num=1)
+
+    for rep in range(nreps): 
+        for requests in range(nrequests//nparams, nrequests+1, nrequests//nparams):
+            setup(ctl, (nprocs,))
+            start(ctl)
+            ps = new(P, num=nprocs)
+            for p in ps: setup(p, (ctl, ps-{p}, requests))
+            start(ps)
+            await(each(p in ps, has=received(('done', p))))
+            send(('done',), to=ps)
+        
+        for procs in range(nprocs//nparams, nprocs+1, nprocs//nparams):
+            setup(ctl, (nprocs,))
+            start(ctl)
+            ps = new(P, num=procs)
+            for p in ps: setup(p, (ctl, ps-{p}, nrequests))
+            start(ps)
+            await(each(p in ps, has=received(('done', p))))
+            send(('done',), to=ps)
 
 # This is an executable specification of the algorithm described in
 # Lamport, L. (1978). "Time, clocks, and the ordering of events in a
