@@ -101,6 +101,7 @@ import sys
 import time
 import json
 from itertools import chain
+from collections import defaultdict
 
 
 # Resource usage data tracking. Reports several measurements
@@ -190,6 +191,16 @@ class Controller(process):
         self.rudata_points = {}
         
         self.ctl_verbose = True
+
+        # Dictionary to count the total #CS request by each process
+        self.cs_req_made = defaultdict(int)
+        self.cs_req_met = defaultdict(int)
+
+        # Bool variable to see if safety has been violated at any instance
+        self.safety = True # if False, two or more processes tried entering CS at the same time
+        self.last_req = None # to store the last CS request made by process
+        self.reason = ""
+
     
     def verboutput(s):
         if ctl_verbose:
@@ -220,6 +231,38 @@ class Controller(process):
             send(('CTL_Stop',), to=rest_ps)
             self.sent_stop = True
     
+    def validate_safety(msg_type, clock_time, process_id):
+        if safety:
+            if msg_type == 'PROC_Enter_CS':
+                if  last_req == None:
+                    last_req = (process_id, clock_time)
+                elif last_req != None:
+                    safety = False
+                    reason = "Process {} tried to enter CS at {} while process {} was already in it".format(
+                        process_id, clock_time, last_req[0]
+                    )
+            if msg_type == 'PROC_Exit_CS':
+                if last_req and last_req[0] == process_id and last_req[1] < clock_time:
+                    last_req = None
+                else:
+                    safety = False
+                    reason = "Process {} sent a release request at {} while process {} was in CS".format(
+                        process_id, clock_time, last_req[0]
+                    )         
+
+    def receive(msg=('PROC_Request_CS', lc, pid), from_=source): 
+        cs_req_made[str(source)] += 1
+        
+
+    def receive(msg=('PROC_Enter_CS', lc, pid), from_=source):
+        validate_safety("PROC_Enter_CS", lc, source)
+        cs_req_met[str(source)] += 1
+        
+
+    def receive(msg=('PROC_Exit_CS', lc, pid), from_=source):
+        validate_safety("PROC_Exit_CS", lc, source)
+        
+
     def run():
         # Start 'em up.
         await(readys == nprocs)
@@ -245,6 +288,18 @@ class Controller(process):
         jsonoutput = json.dumps(jsondata)
         print("###OUTPUT: " + jsonoutput)
         
+        correctness = {}
+        if safety:
+            correctness['safety'] = safety
+        else:
+            correctness['safety'] = (safety, reason)
+       
+        correctness['CS_req_made'] = cs_req_made
+        correctness['CS_req_met'] = cs_req_met
+
+        correctness_output = json.dumps(correctness)
+        print("###CORRECTNESS_OUTPUT: " + correctness_output)
+
         time.sleep(1)
 
 class Controllee(process):
@@ -274,7 +329,7 @@ class Controllee(process):
         send(('CTL_Done', self.rudata, rugroup_id), to=ctl)
         await(received(('CTL_Terminate',)))
         verboutput("Terminating...")
-    
+
     def receive(msg=('CTL_Stop',)):
         # If we already sent the done message, i.e., we were in the
         # process of finishing when we were stopped, ignore.

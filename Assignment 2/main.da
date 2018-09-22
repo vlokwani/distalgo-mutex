@@ -7,11 +7,20 @@ import json
 #import spec
 
 
-def parse_output(s):
+def parse_performance_output(s):
     """Parse a string of standard output text for the "OUTPUT: <JSON>"
     line and return the parsed JSON object.
     """
     m = re.search(r'^###OUTPUT: (.*)', s, re.MULTILINE)
+    if m is None:
+        return None
+    return json.loads(m.group(1))
+
+def parse_correctness_output(s):
+    """Parse a string of standard output text for the "CORRECTNESS_OUTPUT: <JSON>"
+    line and return the parsed JSON object.
+    """
+    m = re.search(r'^###CORRECTNESS_OUTPUT: (.*)', s, re.MULTILINE)
     if m is None:
         return None
     return json.loads(m.group(1))
@@ -44,8 +53,9 @@ def launch(run_args, timeout=60):
     # if child.returncode != 0:
         # raise subprocess.CalledProcessError(child.returncode, run_args, stderr)
 
-    results = parse_output(stdout)
-    return results
+    performance_results = parse_performance_output(stdout)
+    correctness_results = parse_correctness_output(stdout)
+    return performance_results, correctness_results
 
 def main():
     parser = argparse.ArgumentParser()

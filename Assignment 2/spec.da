@@ -9,12 +9,15 @@ class P(process, controller.Controllee):
         -- request
         c = logical_clock()
         send(('request', c, self.id), to= s)
+        send(("PROC_Request_CS", c, self), to=ctl)
         await(each(received(('request', c2, p)),
                    has= received(('release', c2, p)) or (c, self.id) < (c2, p))
               and each(p in s, has= received(('ack', c, p))))
         -- critical_section
+        send(("PROC_Enter_CS", logical_clock(), self), to=ctl)
         task()
         -- release
+        send(("PROC_Exit_CS", logical_clock(), self), to=ctl)
         send(('release', c, self.id), to= s)
 
     def receive(msg= ('request', c, p)):
