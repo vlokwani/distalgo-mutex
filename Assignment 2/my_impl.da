@@ -8,7 +8,11 @@ class P(process, controller.Controllee):
         super().setup(ctl)
         self.q = set()
         self.cs = False
-        self.proc_waiting = 0
+            # to see if the process is already in CS. This will stop it from going into CS
+            # again while one req is already being processed.
+        self.proc_waiting = 0 
+            # inc if the process has placed a req for resource and waiting to go into CS
+
 
     def requestResource():
         -- request
@@ -27,7 +31,6 @@ class P(process, controller.Controllee):
 
     def criticalSection(task):
         -- critical_section
-        # output(cond, self)
         if proc_waiting > 0 and not cs:
             await(some(('request', c, self) in q, has=each(('request', c2, p) in q, has= (c, self) == (c2, p) or (c, self) < (c2, p))) and each(p in s, has=some(received(('ack', c3, _p)), has= c3 > c)))
             # output("Entering critical section for process: ", self)
