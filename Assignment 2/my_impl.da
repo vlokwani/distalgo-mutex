@@ -8,16 +8,18 @@ class P(process, controller.Controllee):
         super().setup(ctl)
         self.q = set()
         self.cs = False
+        self.proc_waiting = 0
 
     def requestResource():
         -- request
         # output("Entering Request resource for process:", self)
         if nrequests > 0:
-            output("Requesting resource for process:", self)
+            # output("Requesting resource for process:", self)
             nrequests -= 1
             c = logical_clock()
             send(('request', c, self), to= s)
             q.add(('request', c, self))
+            proc_waiting += 1
             send(("PROC_Request_CS", c, self), to=ctl)
             # await(each(('request', c2, p) in q,
             #         has= (c2, p)==(c, self) or (c, self) < (c2, p)) and
@@ -25,24 +27,23 @@ class P(process, controller.Controllee):
 
     def criticalSection(task):
         -- critical_section
-        cond = some(('request', c, self) in q, has=each(('request', c2, p) in q, has= (c, self) == (c2, p) or (c, self) < (c2, p))) and each(p in s, has=some(received(('ack', c3, _p)), has= c3 > c))
         # output(cond, self)
-        if cond and not cs:
-            output("Entering critical section for process: ", self)
+        if proc_waiting > 0 and not cs:
+            await(some(('request', c, self) in q, has=each(('request', c2, p) in q, has= (c, self) == (c2, p) or (c, self) < (c2, p))) and each(p in s, has=some(received(('ack', c3, _p)), has= c3 > c)))
+            # output("Entering critical section for process: ", self)
             cs = True
             send(("PROC_Enter_CS", logical_clock(), self), to=ctl)
             task()
             
-            
-
     def releaseResource():
         -- release
         if cs:
-            output("Release resource for process", self)
+            # output("Release resource for process", self)
             cs = False
             for r in setof(('request', c, self), ('request', c, self) in q):
                 q.remove(r)
                 break
+            proc_waiting -= 1
             send(("PROC_Exit_CS", logical_clock(), self), to=ctl)
             send(('release', logical_clock(), self), to= s)
 
