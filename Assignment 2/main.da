@@ -44,11 +44,7 @@ def launch(run_args, timeout=60):
         #env=env,
         universal_newlines=True)
     
-    try:
-        stdout, stderr = child.communicate(timeout=timeout)
-    except TimeoutError:
-        child.kill() # because of disobedience :@
-        stdout, stderr = child.communicate()
+    stdout, stderr = child.communicate(timeout=timeout)
 #   print(stdout)
     # if child.returncode != 0:
         # raise subprocess.CalledProcessError(child.returncode, run_args, stderr)
@@ -57,16 +53,19 @@ def launch(run_args, timeout=60):
     correctness_results = parse_correctness_output(stdout)
     return performance_results, correctness_results
 
+# Functions: parse_performance_output, parse_correctness_output & launch were taken form 
+# the file run.py from: https://github.com/DistAlgo/distalgo/blob/1.1.0b12/benchmarks/run.py.
+# These have also been modified a little to suit the needs of main.da.
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('nprocs', nargs='?', default=10, type=int)
     parser.add_argument('nrequests', nargs='?', default=1, type=int)
-    parser.add_argument('nruns', nargs='?', default=1, type=int)
     parser.add_argument('nparams', nargs='?', default=1, type=int)
     parser.add_argument('nreps', nargs='?', default=1, type=int)
     args = parser.parse_args()
 
-    nprocs, nrequests, nruns, nparams, nreps = args.nprocs, args.nrequests, args.nruns, args.nparams, args.nreps
+    nprocs, nrequests, nparams, nreps = args.nprocs, args.nrequests, args.nparams, args.nreps
 
     # ctl = new(controller.Controller, num= 1)
     # setup(ctl, (nprocs,))
@@ -75,12 +74,47 @@ def main():
     mutex_implementations = ['my_impl.da', 'orig.da', 'spec.da']
 
     for mutex_impl in mutex_implementations:
-        print("running performance testing for mutex implementation: {}".format(mutex_impl))
+        print("**** Running performance testing for mutex implementation: {} ****\n\n".format(mutex_impl))
         for rep in range(nreps): 
             for requests in range(nrequests//nparams, nrequests+1, nrequests//nparams):
-                results = launch(['python3', '-m', 'da', mutex_impl, str(nprocs), str(requests)])
-                print(results)
+                
+                print("*** Results for {} processes and {} requests ***\n\n".format(nprocs, requests))
+                try:
+                    results = launch(['python3', '-m', 'da', mutex_impl, str(nprocs), str(requests)])
+                except TimeoutError:
+                    print("There was a deadlock because of which the process timedout. Number of requests: {} and processes: {}".format(requests, nprocs))
+                    print("performance metrics and correctness metrics could not be collected")
+                    continue
+                print("Performance Metric: \n")
+                print(json.dumps(results[0]['All'], indent=4, sort_keys=True))
+                
+                print("\n\n Correctness Metrics: \n")
+                print("Safety: {}\n".format(results[1]["safety"]))
+                print("Liveness: True\n") # Since there were no deadlocks in the system
+                fairness = True 
+                for proc in results[1]['CS_req_made']: 
+                    if results[1]['CS_req_made'][proc] != results[1]['CS_req_met'][proc]:
+                        fairness = False
+                        break
+                print("Fairness: {}".format(fairness))
                 
             for procs in range(nprocs//nparams, nprocs+1, nprocs//nparams):
-                results = launch(['python3', '-m', 'da', mutex_impl, str(procs), str(nrequests)])
-                print(results)
+                print("*** Results for {} processes and {} requests ***\n\n".format(procs, nrequests))
+                try:
+                    results = launch(['python3', '-m', 'da', mutex_impl, str(procs), str(nrequests)])
+                except TimeoutError:
+                    print("There was a deadlock because of which the process timedout. Number of requests: {} and processes: {}".format(nrequests, procs))
+                    print("performance metrics and correctness metrics could not be collected")
+                
+                print("Performance Metric: \n")
+                print(json.dumps(results[0]['All'], indent=4, sort_keys=True))
+                
+                print("\n\n Correctness Metrics: \n")
+                print("Safety: {}\n".format(results[1]["safety"]))
+                print("Liveness: True\n") # Since there were no deadlocks in the system
+                fairness = True 
+                for proc in results[1]['CS_req_made']: 
+                    if results[1]['CS_req_made'][proc] != results[1]['CS_req_met'][proc]:
+                        fairness = False
+                        break
+                print("Fairness: {}".format(fairness))
