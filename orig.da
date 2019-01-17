@@ -11,21 +11,21 @@ class P(process, controller.Controllee):
         c = logical_clock()
         send(('request', c, self), to= s)
         q.add(('request', c, self))
-        send(("PROC_Request_CS", c, self), to=ctl)
+        send(("PROC_Request_CS", c, self, 'dummy'), to=ctl)
         await(each(('request', c2, p) in q,
                    has= (c2, p)==(c, self) or (c, self) < (c2, p)) and
-              each(p in s, has= some(received(('ack', c2, _p)), has= c2 > c)))
+              each(p in s, has= some(received(('ack', c2, _p, 'dummy')), has= c2 > c)))
         -- critical_section
         send(("PROC_Enter_CS", logical_clock(), self), to=ctl)
         task()
         -- release
-        q.remove(('request', c, self))
-        send(("PROC_Exit_CS", logical_clock(), self), to=ctl)
-        send(('release', logical_clock(), self), to= s)
+        q.remove(('request', c, self, 'dummy'))
+        send(("PROC_Exit_CS", logical_clock(), self, 'dummy'), to=ctl)
+        send(('release', logical_clock(), self, 'dummy'), to= s)
 
     def receive(msg= ('request', c2, p)):
         q.add(('request', c2, p))
-        send(('ack', logical_clock(), self), to= p)
+        send(('ack', logical_clock(), self, 'dummy'), to= p)
 
     def receive(msg= ('release', _, p)):
 #        q.remove(('request', _, p))  # pattern matching needed for _

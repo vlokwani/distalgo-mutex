@@ -70,16 +70,18 @@ class P(process, controller.Controllee):
     def run():
         def task():
             output('in cs')
-        asyncFunctions = [
-                (requestResource, []), 
-                (criticalSection, [task]),
-                (releaseResource, [])
-            ]
-        while nrequests > 0 or setof(('request', c, self), ('request', c, self) in q):
-            func = asyncFunctions[rand.randint(0,2)]
-            # output(nreq   uests, setof(('request', c, self), ('request', c, self) in q))
-            func[0](*func[1])
-
+        # asyncFunctions = [
+        #         (requestResource, []), 
+        #         (criticalSection, [task]),
+        #         (releaseResource, [])
+        #     ]
+        # while nrequests > 0 or setof(('request', c, self), ('request', c, self) in q):
+        #     func = asyncFunctions[rand.randint(0,2)]
+        #     # output(nreq   uests, setof(('request', c, self), ('request', c, self) in q))
+        #     func[0](*func[1])
+        s = set([('accepted', 7, 'a', 1), ('rejected', 8, 'b', 2), ('accepted', 7, 'a', 3), ('rejected', 7, 'd'), ('rejected', 7, 4)])
+        p = 'a'
+        output(setof(ele[0], ele in s, len(ele) == 4, ele[1] == 7, ele[2] == p))
         # send(('done', self), to= parent())
         # await(received(('done',), from_=parent()))
         # output('terminating')
