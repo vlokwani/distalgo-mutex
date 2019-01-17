@@ -4,6 +4,6 @@ Mode details about the package can be found at the link: https://github.com/Dist
 
 The following command needs to be executed from the command line: 
 
-python3 -m da my_impl.da <no of processes> <no of requests>
+python3 -m da my_impl.da &lt;no of processes&gt; &lt;no of requests&gt;
 
 
